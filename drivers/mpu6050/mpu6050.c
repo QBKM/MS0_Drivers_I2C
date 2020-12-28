@@ -2,161 +2,197 @@
 /* ------------------------------------------------------------- --
    Includes
 -- ------------------------------------------------------------- */
-#include <math.h>
 #include "mpu6050.h"
-
-
-/* ------------------------------------------------------------- --
-   Defines
--- ------------------------------------------------------------- */
-#define RAD_TO_DEG 57.295779513082320876798154814105
-
-#define WHO_AM_I_REG 0x75
-#define PWR_MGMT_1_REG 0x6B
-#define SMPLRT_DIV_REG 0x19
-#define ACCEL_CONFIG_REG 0x1C
-#define ACCEL_XOUT_H_REG 0x3B
-#define TEMP_OUT_H_REG 0x41
-#define GYRO_CONFIG_REG 0x1B
-#define GYRO_XOUT_H_REG 0x43
-
-#define MPU6050_ADDR 0x68 << 1 				/* ( << 1 car on ajoute le R/W bit */
 
 
 /* ------------------------------------------------------------- --
    Variables
 -- ------------------------------------------------------------- */
 const uint16_t i2c_timeout = 100;
+
+/* accel correctors */
 const double Accel_Z_corrector = 14418.0;
-uint32_t timer;
+const double Accel_X_Y_corrector = 16384.0;
+
+/* gyro correctors */
+const double Gyro_X_Y_Z_corrector = 131.0;
 
 
 /* ------------------------------------------------------------- --
    Functions
 -- ------------------------------------------------------------- */
-uint8_t MPU6050_Init(I2C_HandleTypeDef *I2Cx) {
+/* ************************************************************* *
+ * @name		MPU6050_Init
+ * @brief		initialize the mpu6050
+ *
+ * @args
+ * ************************************************************* */
+uint8_t MPU6050_Init(MPU6050_t *MPU6050) {
     uint8_t check;
-    uint8_t Data;
+    uint8_t data;
 
-    // check device ID WHO_AM_I
-    HAL_I2C_Mem_Read(I2Cx, MPU6050_ADDR, WHO_AM_I_REG, 1, &check, 1, i2c_timeout);
+    /* initialize the accel to 0 */
+    MPU6050->Ax = 0.0;
+    MPU6050->Ay = 0.0;
+    MPU6050->Az = 0.0;
 
-    if (check == 104)  // 0x68 will be returned by the sensor if everything goes well
-    {
-        // power management register 0X6B we should write all 0's to wake the sensor up
-        Data = 0;
-        HAL_I2C_Mem_Write(I2Cx, MPU6050_ADDR, PWR_MGMT_1_REG, 1, &Data, 1, i2c_timeout);
+    /* initialize the gyro to 0 */
+    MPU6050->Gx = 0.0;
+    MPU6050->Gy = 0.0;
+    MPU6050->Gz = 0.0;
 
-        // Set DATA RATE of 1KHz by writing SMPLRT_DIV register
-        Data = 0x07;
-        HAL_I2C_Mem_Write(I2Cx, MPU6050_ADDR, SMPLRT_DIV_REG, 1, &Data, 1, i2c_timeout);
+    /* Structure to configure the MPU6050 */
+    MPU6050_config_t config;
+    config.AFS = 	MPU6050_AFS_16G;
+    config.GFS = 	MPU6050_GFS_2000_DEG_S;
+    config.SR =		MPU6050_SR_1KHZ;
+    MPU6050->config = config;
 
-        // Set accelerometer configuration in ACCEL_CONFIG Register
-        // XA_ST=0,YA_ST=0,ZA_ST=0, FS_SEL=0 -> � 2g
-        Data = 0x00;
-        HAL_I2C_Mem_Write(I2Cx, MPU6050_ADDR, ACCEL_CONFIG_REG, 1, &Data, 1, i2c_timeout);
 
-        // Set Gyroscopic configuration in GYRO_CONFIG Register
-        // XG_ST=0,YG_ST=0,ZG_ST=0, FS_SEL=0 -> � 250 �/s
-        Data = 0x00;
-        HAL_I2C_Mem_Write(I2Cx, MPU6050_ADDR, GYRO_CONFIG_REG, 1, &Data, 1, i2c_timeout);
-        return 0;
-    }
-    return 1;
+    /* check device ID WHO_AM_I */
+    if(HAL_I2C_Mem_Read(&MPU6050->i2c, MPU6050_ADDR, MPU6050_WHO_AM_I_REG, 1, &check, 1, i2c_timeout)) return HAL_ERROR;
+
+    /* 0x68 will be returned by the sensor if everything goes well */
+    if (check != (MPU6050_ADDR >> 1)) return HAL_ERROR;
+
+	/* power management register 0X6B we should write all 0's to wake the sensor up */
+	data = 0x0;
+	if(HAL_I2C_Mem_Write(&MPU6050->i2c, MPU6050_ADDR, MPU6050_PWR_MGMT_1_REG, 1, &data, 1, i2c_timeout)) return HAL_ERROR;
+
+	/* Set DATA RATE of 1KHz by writing SMPLRT_DIV register */
+	data = (MPU6050->config.SR);
+	if(HAL_I2C_Mem_Write(&MPU6050->i2c, MPU6050_ADDR, MPU6050_SMPLRT_DIV_REG, 1, &data, 1, i2c_timeout)) return HAL_ERROR;
+
+	/* Set accelerometer configuration in ACCEL_CONFIG Register */
+	data = (MPU6050->config.AFS <<3);
+	if(HAL_I2C_Mem_Write(&MPU6050->i2c, MPU6050_ADDR, MPU6050_ACCEL_CONFIG_REG, 1, &data, 1, i2c_timeout)) return HAL_ERROR;
+
+	/* Set Gyroscopic configuration in GYRO_CONFIG Register */
+	data = (MPU6050->config.GFS <<3);
+	if(HAL_I2C_Mem_Write(&MPU6050->i2c, MPU6050_ADDR, MPU6050_GYRO_CONFIG_REG, 1, &data, 1, i2c_timeout)) return HAL_ERROR;
+
+	return HAL_OK;
 }
 
 
-/* ##################################################################################### */
-void MPU6050_Read_Accel(I2C_HandleTypeDef *I2Cx, MPU6050_t *DataStruct)
+/* ************************************************************* *
+ * @name		MPU6050_Read_Accel
+ * @brief		read the acceleration data
+ *
+ * @args
+ * ************************************************************* */
+uint8_t MPU6050_Read_Accel(MPU6050_t *MPU6050)
 {
-    uint8_t Rec_Data[6];
+    uint8_t data[6];
 
-    // Read 6 BYTES of data starting from ACCEL_XOUT_H register
-    HAL_I2C_Mem_Read(I2Cx, MPU6050_ADDR, ACCEL_XOUT_H_REG, 1, Rec_Data, 6, i2c_timeout);
+    /* Read 6 BYTES of data starting from ACCEL_XOUT_H register */
+    if(HAL_I2C_Mem_Read(&MPU6050->i2c, MPU6050_ADDR, MPU6050_ACCEL_XOUT_H_REG, 1, data, 6, i2c_timeout)) return HAL_ERROR;
 
-    DataStruct->Accel_X_RAW = (int16_t) (Rec_Data[0] << 8 | Rec_Data[1]);
-    DataStruct->Accel_Y_RAW = (int16_t) (Rec_Data[2] << 8 | Rec_Data[3]);
-    DataStruct->Accel_Z_RAW = (int16_t) (Rec_Data[4] << 8 | Rec_Data[5]);
+    MPU6050->Accel_X_RAW = (int16_t) (data[0] << 8 | data[1]);
+    MPU6050->Accel_Y_RAW = (int16_t) (data[2] << 8 | data[3]);
+    MPU6050->Accel_Z_RAW = (int16_t) (data[4] << 8 | data[5]);
 
     /*** convert the RAW values into acceleration in 'g'
          we have to divide according to the Full scale value set in FS_SEL
          I have configured FS_SEL = 0. So I am dividing by 16384.0
          for more details check ACCEL_CONFIG Register              ****/
 
-    DataStruct->Ax = DataStruct->Accel_X_RAW / 16384.0;
-    DataStruct->Ay = DataStruct->Accel_Y_RAW / 16384.0;
-    DataStruct->Az = DataStruct->Accel_Z_RAW / Accel_Z_corrector;
+    MPU6050->Ax = MPU6050->Accel_X_RAW / Accel_X_Y_corrector;
+    MPU6050->Ay = MPU6050->Accel_Y_RAW / Accel_X_Y_corrector;
+    MPU6050->Az = MPU6050->Accel_Z_RAW / Accel_Z_corrector;
+
+    return HAL_OK;
 }
 
 
-/* ##################################################################################### */
-void MPU6050_Read_Gyro(I2C_HandleTypeDef *I2Cx, MPU6050_t *DataStruct)
+/* ************************************************************* *
+ * @name		MPU6050_Read_Gyro
+ * @brief		read the gyroscope data
+ *
+ * @args
+ * ************************************************************* */
+uint8_t MPU6050_Read_Gyro(MPU6050_t *MPU6050)
 {
-    uint8_t Rec_Data[6];
+    uint8_t data[6];
 
     // Read 6 BYTES of data starting from GYRO_XOUT_H register
-    HAL_I2C_Mem_Read(I2Cx, MPU6050_ADDR, GYRO_XOUT_H_REG, 1, Rec_Data, 6, i2c_timeout);
+    if(HAL_I2C_Mem_Read(&MPU6050->i2c, MPU6050_ADDR, MPU6050_GYRO_XOUT_H_REG, 1, data, 6, i2c_timeout)) return HAL_ERROR;
 
-    DataStruct->Gyro_X_RAW = (int16_t) (Rec_Data[0] << 8 | Rec_Data[1]);
-    DataStruct->Gyro_Y_RAW = (int16_t) (Rec_Data[2] << 8 | Rec_Data[3]);
-    DataStruct->Gyro_Z_RAW = (int16_t) (Rec_Data[4] << 8 | Rec_Data[5]);
+    MPU6050->Gyro_X_RAW = (int16_t) (data[0] << 8 | data[1]);
+    MPU6050->Gyro_Y_RAW = (int16_t) (data[2] << 8 | data[3]);
+    MPU6050->Gyro_Z_RAW = (int16_t) (data[4] << 8 | data[5]);
 
-    /*** convert the RAW values into dps (�/s)
+    /*** convert the RAW values into dps (deg/s)
          we have to divide according to the Full scale value set in FS_SEL
          I have configured FS_SEL = 0. So I am dividing by 131.0
          for more details check GYRO_CONFIG Register              ****/
 
-    DataStruct->Gx = DataStruct->Gyro_X_RAW / 131.0;
-    DataStruct->Gy = DataStruct->Gyro_Y_RAW / 131.0;
-    DataStruct->Gz = DataStruct->Gyro_Z_RAW / 131.0;
+    MPU6050->Gx = MPU6050->Gyro_X_RAW / Gyro_X_Y_Z_corrector;
+    MPU6050->Gy = MPU6050->Gyro_Y_RAW / Gyro_X_Y_Z_corrector;
+    MPU6050->Gz = MPU6050->Gyro_Z_RAW / Gyro_X_Y_Z_corrector;
+
+    return HAL_OK;
 }
 
-/* ##################################################################################### */
-void MPU6050_Read_Temp(I2C_HandleTypeDef *I2Cx, MPU6050_t *DataStruct)
+/* ************************************************************* *
+ * @name		MPU6050_Read_Temp
+ * @brief		read the temperature data
+ *
+ * @args
+ * ************************************************************* */
+uint8_t MPU6050_Read_Temp(MPU6050_t *MPU6050)
 {
-    uint8_t Rec_Data[2];
+    uint8_t data[2];
     int16_t temp;
 
     // Read 2 BYTES of data starting from TEMP_OUT_H_REG register
-    HAL_I2C_Mem_Read(I2Cx, MPU6050_ADDR, TEMP_OUT_H_REG, 1, Rec_Data, 2, i2c_timeout);
+    if(HAL_I2C_Mem_Read(&MPU6050->i2c, MPU6050_ADDR, MPU6050_TEMP_OUT_H_REG, 1, data, 2, i2c_timeout)) return HAL_ERROR;
 
-    temp = (int16_t) (Rec_Data[0] << 8 | Rec_Data[1]);
-    DataStruct->Temperature = (float) ((int16_t) temp / (float) 340.0 + (float) 36.53);
+    temp = (int16_t) (data[0] << 8 | data[1]);
+    MPU6050->Temperature = (float) ((int16_t) temp / (float) 340.0 + (float) 36.53);
+
+    return HAL_OK;
 }
 
 
-/* ##################################################################################### */
-void MPU6050_Read_All(I2C_HandleTypeDef *I2Cx, MPU6050_t *DataStruct)
+/* ************************************************************* *
+ * @name		MPU6050_Read_All
+ * @brief		read all the data
+ *
+ * @args
+ * ************************************************************* */
+uint8_t MPU6050_Read_All(MPU6050_t *MPU6050)
 {
-    uint8_t Rec_Data[14];
-    int16_t temp;
+    uint8_t data[14];
 
     // Read 14 BYTES of data starting from ACCEL_XOUT_H register
-    HAL_I2C_Mem_Read(I2Cx, MPU6050_ADDR, ACCEL_XOUT_H_REG, 1, Rec_Data, 14, i2c_timeout);
+    if(HAL_I2C_Mem_Read(&MPU6050->i2c, MPU6050_ADDR, MPU6050_ACCEL_XOUT_H_REG, 1, data, 14, i2c_timeout)) return HAL_ERROR;
 
     /*< get accel >*/
-    DataStruct->Accel_X_RAW = (int16_t) (Rec_Data[0] << 8 | Rec_Data[1]);
-    DataStruct->Accel_Y_RAW = (int16_t) (Rec_Data[2] << 8 | Rec_Data[3]);
-    DataStruct->Accel_Z_RAW = (int16_t) (Rec_Data[4] << 8 | Rec_Data[5]);
+    MPU6050->Accel_X_RAW = (int16_t) (data[0] << 8 | data[1]);
+    MPU6050->Accel_Y_RAW = (int16_t) (data[2] << 8 | data[3]);
+    MPU6050->Accel_Z_RAW = (int16_t) (data[4] << 8 | data[5]);
 
     /*< get temperature >*/
-    temp = (int16_t) (Rec_Data[6] << 8 | Rec_Data[7]);
+    MPU6050->Temperature_RAW = (int16_t) (data[6] << 8 | data[7]);
 
     /*< get gyro >*/
-    DataStruct->Gyro_X_RAW = (int16_t) (Rec_Data[8] << 8 | Rec_Data[9]);
-    DataStruct->Gyro_Y_RAW = (int16_t) (Rec_Data[10] << 8 | Rec_Data[11]);
-    DataStruct->Gyro_Z_RAW = (int16_t) (Rec_Data[12] << 8 | Rec_Data[13]);
+    MPU6050->Gyro_X_RAW = (int16_t) (data[8]  << 8  | data[9]);
+    MPU6050->Gyro_Y_RAW = (int16_t) (data[10] << 8 | data[11]);
+    MPU6050->Gyro_Z_RAW = (int16_t) (data[12] << 8 | data[13]);
 
     /*< get corrected accel >*/
-    DataStruct->Ax = DataStruct->Accel_X_RAW / 16384.0;
-    DataStruct->Ay = DataStruct->Accel_Y_RAW / 16384.0;
-    DataStruct->Az = DataStruct->Accel_Z_RAW / Accel_Z_corrector;
+    MPU6050->Ax = MPU6050->Accel_X_RAW / Accel_X_Y_corrector;
+    MPU6050->Ay = MPU6050->Accel_Y_RAW / Accel_X_Y_corrector;
+    MPU6050->Az = MPU6050->Accel_Z_RAW / Accel_Z_corrector;
 
     /*< get corrected temperature >*/
-    DataStruct->Temperature = (float) ((int16_t) temp / (float) 340.0 + (float) 36.53);
+    MPU6050->Temperature = (float) (MPU6050->Temperature_RAW / (float) 340.0 + (float) 36.53);
 
     /*< get corrected gyro >*/
-    DataStruct->Gx = DataStruct->Gyro_X_RAW / 131.0;
-    DataStruct->Gy = DataStruct->Gyro_Y_RAW / 131.0;
-    DataStruct->Gz = DataStruct->Gyro_Z_RAW / 131.0;
+    MPU6050->Gx = MPU6050->Gyro_X_RAW / Gyro_X_Y_Z_corrector;
+    MPU6050->Gy = MPU6050->Gyro_Y_RAW / Gyro_X_Y_Z_corrector;
+    MPU6050->Gz = MPU6050->Gyro_Z_RAW / Gyro_X_Y_Z_corrector;
+
+    return HAL_OK;
 }
