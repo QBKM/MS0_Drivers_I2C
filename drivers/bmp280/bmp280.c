@@ -96,13 +96,13 @@ uint8_t BMP280_Read_All(BMP280_t* BMP280)
 	int32_t fixed_temperature;
 	uint32_t fixed_pressure;
 
-	if(bmp280_read_fixed(BMP280, &fixed_temperature, &fixed_pressure))
+	if(!bmp280_read_fixed(BMP280, &fixed_temperature, &fixed_pressure))
 	{
 		BMP280->temperature = (float) fixed_temperature / 100;
 		BMP280->pressure = (float) fixed_pressure / 256;
-		return true;
+		return HAL_OK;
 	}
-	return false;
+	return HAL_ERROR;
 }
 
 
@@ -119,7 +119,7 @@ uint8_t bmp280_read_fixed(BMP280_t* BMP280, int32_t *temperature, uint32_t *pres
 	int32_t fine_temp;
 	uint8_t data[6];
 
-	if(HAL_I2C_Mem_Read(&BMP280->i2c, BMP280_ADDR<<1, BMP280_REG_PRESS_MSB, 1, data, sizeof(data), i2c_timeout)) return false;
+	if(HAL_I2C_Mem_Read(&BMP280->i2c, BMP280_ADDR<<1, BMP280_REG_PRESS_MSB, 1, data, sizeof(data), i2c_timeout)) return HAL_ERROR;
 
 	adc_pressure = data[0] << 12 | data[1] << 4 | data[2] >> 4;
 	adc_temp = data[3] << 12 | data[4] << 4 | data[5] >> 4;
@@ -127,7 +127,7 @@ uint8_t bmp280_read_fixed(BMP280_t* BMP280, int32_t *temperature, uint32_t *pres
 	*temperature = bmp280_compensate_temperature(BMP280, adc_temp, &fine_temp);
 	*pressure = bmp280_compensate_pressure(BMP280, adc_pressure, fine_temp);
 
-	return true;
+	return HAL_OK;
 }
 
 
@@ -203,9 +203,9 @@ static uint8_t bmp280_read_calibration_data(BMP280_t *BMP280) {
 	&& bmp280_read_register16(BMP280, 0x9c, (uint16_t *) &BMP280->calib.dig_P8)
 	&& bmp280_read_register16(BMP280, 0x9e, (uint16_t *) &BMP280->calib.dig_P9))
 	{
-		return true;
+		return HAL_OK;
 	}
-	return false;
+	return HAL_ERROR;
 }
 
 
