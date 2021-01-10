@@ -53,15 +53,6 @@
 -- ------------------------------------------------------------- */
 typedef enum
 {
-  ALARM_MODE_ALL_MATCHED = 0,
-  ALARM_MODE_HOUR_MIN_SEC_MATCHED,
-  ALARM_MODE_MIN_SEC_MATCHED,
-  ALARM_MODE_SEC_MATCHED,
-  ALARM_MODE_ONCE_PER_SECOND
-} DS3231_AlarmMode;
-
-typedef enum
-{
   SUNDAY = 1,
   MONDAY,
   TUESDAY,

@@ -30,16 +30,16 @@ static uint8_t D2B(uint8_t decimal);
 == ============================================================= */
 /* ************************************************************* *
  * @name		DS3231_Init
- * @brief
+ * @brief   init the time of the ds3231
  *
- * @args
+ * @args    DS3231_t
  * ************************************************************* */
 uint8_t DS3231_Init(DS3231_t *DS3231)
 {
   DS3231->Sec =         0;  /* 0 sec */
   DS3231->Min =         0;  /* 0 mins */
   DS3231->Hour =        0;  /* 0 hours */
-  DS3231->DaysOfWeek =  1;  /* monday*/
+  DS3231->DaysOfWeek =  1;  /* 1 = sunday*/
   DS3231->Date =        1;  /* 1st */
   DS3231->Month =       1;  /* January */
   DS3231->Year =        0;  /* 0000 */
@@ -50,9 +50,9 @@ uint8_t DS3231_Init(DS3231_t *DS3231)
 
 /* ************************************************************* *
  * @name		DS3231_Read_All
- * @brief
+ * @brief   Read the time and the temperature
  *
- * @args
+ * @args    DS3231_t
  * ************************************************************* */
 uint8_t DS3231_Read_All(DS3231_t *DS3231)
 {
@@ -64,9 +64,9 @@ uint8_t DS3231_Read_All(DS3231_t *DS3231)
 
 /* ************************************************************* *
  * @name		DS3231_Read_Time
- * @brief
+ * @brief   Read the time
  *
- * @args
+ * @args    DS3231_t
  * ************************************************************* */
 uint8_t DS3231_Read_Time(DS3231_t *DS3231)
 {
@@ -87,27 +87,10 @@ uint8_t DS3231_Read_Time(DS3231_t *DS3231)
 
 
 /* ************************************************************* *
- * @name		DS3231_SetTime
- * @brief
- *
- * @args
- * ************************************************************* */
-uint8_t DS3231_SetTime(DS3231_t *DS3231)
-{
-  uint8_t startAddr = DS3231_REG_TIME;
-  uint8_t data[8] = {startAddr, D2B(DS3231->Sec), D2B(DS3231->Min), D2B(DS3231->Hour), DS3231->DaysOfWeek, D2B(DS3231->Date), D2B(DS3231->Month), D2B(DS3231->Year)};
-  
-  if(HAL_I2C_Master_Transmit(&DS3231->i2c, DS3231_ADDR, data, sizeof(data), HAL_MAX_DELAY)) return HAL_ERROR;
-
-  return HAL_OK;
-}
-
-
-/* ************************************************************* *
  * @name		DS3231_Read_Temperature
- * @brief
+ * @brief   Read the temperature
  *
- * @args
+ * @args    DS3231_t
  * ************************************************************* */
 uint8_t DS3231_Read_Temperature(DS3231_t *DS3231)
 {
@@ -124,10 +107,27 @@ uint8_t DS3231_Read_Temperature(DS3231_t *DS3231)
 
 
 /* ************************************************************* *
- * @name		B2D
- * @brief bcd to decimal
+ * @name		DS3231_SetTime
+ * @brief   Set the time
  *
- * @args
+ * @args    DS3231_t
+ * ************************************************************* */
+uint8_t DS3231_SetTime(DS3231_t *DS3231)
+{
+  uint8_t startAddr = DS3231_REG_TIME;
+  uint8_t data[8] = {startAddr, D2B(DS3231->Sec), D2B(DS3231->Min), D2B(DS3231->Hour), DS3231->DaysOfWeek, D2B(DS3231->Date), D2B(DS3231->Month), D2B(DS3231->Year)};
+  
+  if(HAL_I2C_Master_Transmit(&DS3231->i2c, DS3231_ADDR, data, sizeof(data), HAL_MAX_DELAY)) return HAL_ERROR;
+
+  return HAL_OK;
+}
+
+
+/* ************************************************************* *
+ * @name		B2D
+ * @brief   Convert the bcd to decimal
+ *
+ * @args    bcd
  * ************************************************************* */
 static uint8_t B2D(uint8_t bcd)
 {
@@ -137,9 +137,9 @@ static uint8_t B2D(uint8_t bcd)
 
 /* ************************************************************* *
  * @name		D2B
- * @brief   decimal to bcd
+ * @brief   Convert the decimal to bcd
  *
- * @args
+ * @args    decimal
  * ************************************************************* */
 static uint8_t D2B(uint8_t decimal)
 {
