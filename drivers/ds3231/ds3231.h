@@ -91,17 +91,6 @@ typedef struct
 }DS3231_t;
 
 
-typedef struct
-{
-   uint8_t Year;
-   uint8_t Month;
-   uint8_t Date;
-   uint8_t DaysOfWeek;
-   uint8_t Hour;
-   uint8_t Min;
-   uint8_t Sec;
-}DS3231_config_t;
-
 /* ------------------------------------------------------------- --
    Functions
 -- ------------------------------------------------------------- */
