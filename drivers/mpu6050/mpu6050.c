@@ -11,12 +11,20 @@
 const uint16_t i2c_timeout = 100;
 
 /* accel correctors */
-const double Accel_Z_corrector = 14418.0;
-const double Accel_X_Y_corrector = 16384.0;
+const double Accel_X_Y_Z_corrector = 2048.0; 
+/*  AFS_SEL = 2g ->  16384
+    AFS_SEL = 4g ->  8192
+    AFS_SEL = 8g ->  4096
+    AFS_SEL = 16g->  2048
+*/
 
 /* gyro correctors */
-const double Gyro_X_Y_Z_corrector = 131.0;
-
+const double Gyro_X_Y_Z_corrector = 16.4;
+/*  FS_SEL = 250 ->  131
+    FS_SEL = 500 ->  65.5
+    FS_SEL = 1000->  32.8
+    FS_SEL = 2000->  16.4
+*/
 
 /* ------------------------------------------------------------- --
    Functions
@@ -92,14 +100,10 @@ uint8_t MPU6050_Read_Accel(MPU6050_t *MPU6050)
     MPU6050->Accel_Y_RAW = (int16_t) (data[2] << 8 | data[3]);
     MPU6050->Accel_Z_RAW = (int16_t) (data[4] << 8 | data[5]);
 
-    /*** convert the RAW values into acceleration in 'g'
-         we have to divide according to the Full scale value set in FS_SEL
-         I have configured FS_SEL = 0. So I am dividing by 16384.0
-         for more details check ACCEL_CONFIG Register              ****/
-
-    MPU6050->Ax = MPU6050->Accel_X_RAW / Accel_X_Y_corrector;
-    MPU6050->Ay = MPU6050->Accel_Y_RAW / Accel_X_Y_corrector;
-    MPU6050->Az = MPU6050->Accel_Z_RAW / Accel_Z_corrector;
+    /* convert the RAW values into acceleration in 'g' */
+    MPU6050->Ax = MPU6050->Accel_X_RAW / Accel_X_Y_Z_corrector;
+    MPU6050->Ay = MPU6050->Accel_Y_RAW / Accel_X_Y_Z_corrector;
+    MPU6050->Az = MPU6050->Accel_Z_RAW / Accel_X_Y_Z_corrector;
 
     return HAL_OK;
 }
@@ -122,11 +126,7 @@ uint8_t MPU6050_Read_Gyro(MPU6050_t *MPU6050)
     MPU6050->Gyro_Y_RAW = (int16_t) (data[2] << 8 | data[3]);
     MPU6050->Gyro_Z_RAW = (int16_t) (data[4] << 8 | data[5]);
 
-    /*** convert the RAW values into dps (deg/s)
-         we have to divide according to the Full scale value set in FS_SEL
-         I have configured FS_SEL = 0. So I am dividing by 131.0
-         for more details check GYRO_CONFIG Register              ****/
-
+    /* convert the RAW values into dps (deg/s) */
     MPU6050->Gx = MPU6050->Gyro_X_RAW / Gyro_X_Y_Z_corrector;
     MPU6050->Gy = MPU6050->Gyro_Y_RAW / Gyro_X_Y_Z_corrector;
     MPU6050->Gz = MPU6050->Gyro_Z_RAW / Gyro_X_Y_Z_corrector;
@@ -182,9 +182,9 @@ uint8_t MPU6050_Read_All(MPU6050_t *MPU6050)
     MPU6050->Gyro_Z_RAW = (int16_t) (data[12] << 8 | data[13]);
 
     /*< get corrected accel >*/
-    MPU6050->Ax = MPU6050->Accel_X_RAW / Accel_X_Y_corrector;
-    MPU6050->Ay = MPU6050->Accel_Y_RAW / Accel_X_Y_corrector;
-    MPU6050->Az = MPU6050->Accel_Z_RAW / Accel_Z_corrector;
+    MPU6050->Ax = MPU6050->Accel_X_RAW / Accel_X_Y_Z_corrector;
+    MPU6050->Ay = MPU6050->Accel_Y_RAW / Accel_X_Y_Z_corrector;
+    MPU6050->Az = MPU6050->Accel_Z_RAW / Accel_X_Y_Z_corrector;
 
     /*< get corrected temperature >*/
     MPU6050->Temperature = (float) (MPU6050->Temperature_RAW / (float) 340.0 + (float) 36.53);

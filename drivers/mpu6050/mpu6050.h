@@ -55,7 +55,7 @@ typedef enum
 
 /* sample rate settings */
 typedef enum
-{							/* Sample Rate = Gyroscope Output Rate / (1 + SMPLRT_DIV) */
+{							   /* Sample Rate = Gyroscope Output Rate / (1 + SMPLRT_DIV) */
 	MPU6050_SR_8KHZ = 1,	/* Gyroscope Output Rate = 8kHz when the DLPF is disabled (DLPF_CFG= 0 or 7), and 1kHz when the DLPF is enabled */
 	MPU6050_SR_4KHZ = 3,
 	MPU6050_SR_2KHZ = 5,
